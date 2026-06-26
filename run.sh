@@ -3,7 +3,6 @@ set -e
 
 cd "$(dirname "$0")"
 
-# Ensure Pygame is installed
 if ! python3 -c "import pygame" &> /dev/null; then
     echo "Installing pygame..."
     pip3 install pygame
@@ -16,12 +15,13 @@ cmake --build build --parallel
 echo "============================================="
 echo "Select a simulation to run:"
 echo "1) Naive vs Smooth (Diagonal) Approach"
-echo "2) Algorithms Comparison (FloodFill, Hand On Wall, A*)"
+echo "2) Algorithms Comparison (Flood Fill, Wall Follower, Time-A*)"
 echo "3) Multi-Agent Cooperation (Case A: Same Destination)"
 echo "4) Multi-Agent Cooperation (Case B: Unique Destinations)"
+echo "5) Benchmark: 100 random mazes x 3 algorithms"
 echo "============================================="
 
-read -p "Enter choice (1-4): " choice
+read -p "Enter choice (1-5): " choice
 
 case $choice in
     1)
@@ -39,6 +39,10 @@ case $choice in
     4)
         echo "Running Multi-Agent (Unique Destinations)..."
         ./build/sim3 src/resources/mazes/example1.num 2 | python3 visualizer.py
+        ;;
+    5)
+        echo "Running benchmark suite..."
+        ./build/benchmark 100 | tee benchmark/results.txt
         ;;
     *)
         echo "Invalid choice. Exiting."

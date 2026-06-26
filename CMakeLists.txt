@@ -18,21 +18,25 @@ set(SIM_BACKEND_SOURCES
     src/Pathfinder.cpp
     src/Agent.cpp
     src/SimulationEngine.cpp
+    src/VisualSimRunner.cpp
 )
 
 add_executable(micromouse_sim src/main.cpp ${SIM_BACKEND_SOURCES})
 add_executable(sim1 src/main_1_naive_vs_smooth.cpp ${SIM_BACKEND_SOURCES})
 add_executable(sim2 src/main_2_algorithms.cpp ${SIM_BACKEND_SOURCES})
 add_executable(sim3 src/main_3_multi_agent.cpp ${SIM_BACKEND_SOURCES})
+add_executable(benchmark src/main_benchmark.cpp ${SIM_BACKEND_SOURCES})
 
 if(MSVC)
     target_compile_options(micromouse_sim PRIVATE /W4)
     target_compile_options(sim1 PRIVATE /W4)
     target_compile_options(sim2 PRIVATE /W4)
     target_compile_options(sim3 PRIVATE /W4)
+    target_compile_options(benchmark PRIVATE /W4)
 else()
     target_compile_options(micromouse_sim PRIVATE -Wall -Wextra -pedantic)
     target_compile_options(sim1 PRIVATE -Wall -Wextra -pedantic)
     target_compile_options(sim2 PRIVATE -Wall -Wextra -pedantic)
     target_compile_options(sim3 PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(benchmark PRIVATE -Wall -Wextra -pedantic)
 endif()

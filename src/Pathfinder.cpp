@@ -5,12 +5,18 @@
 #include <algorithm>
 #include <iostream>
 
+int snapAngle(double angle) {
+    int snapped = static_cast<int>(std::round(angle / 90.0)) * 90;
+    return ((snapped % 360) + 360) % 360;
+}
+
 struct State {
     int x, y;
-    double angle;
-    double cost;
+    int angle;
+    double g_cost;
+    double f_cost;
     
-    bool operator>(const State& other) const { return cost > other.cost; }
+    bool operator>(const State& other) const { return f_cost > other.f_cost; }
     bool operator<(const State& other) const {
         if (x != other.x) return x < other.x;
         if (y != other.y) return y < other.y;
@@ -18,29 +24,41 @@ struct State {
     }
 };
 
+namespace {
+double timeHeuristic(int x, int y, int dest_x, int dest_y, bool smooth, double max_speed) {
+    const double dx = static_cast<double>(dest_x - x);
+    const double dy = static_cast<double>(dest_y - y);
+    if (smooth) {
+        return std::sqrt(dx * dx + dy * dy) / max_speed;
+    }
+    return (std::abs(dx) + std::abs(dy)) / max_speed;
+}
+}
+
 PathResult Pathfinder::findPathTimeAStar(const Maze& maze, int start_x, int start_y, int dest_x, int dest_y, double start_angle, bool smooth, double max_speed) {
     std::priority_queue<State, std::vector<State>, std::greater<State>> pq;
     std::map<State, double> min_cost;
     std::map<State, State> parent;
     
-    State start_state = {start_x, start_y, start_angle, 0.0};
+    const double start_h = timeHeuristic(start_x, start_y, dest_x, dest_y, smooth, max_speed);
+    State start_state = {start_x, start_y, snapAngle(start_angle), 0.0, start_h};
     pq.push(start_state);
     min_cost[start_state] = 0.0;
     
-    State best_end_state = {-1, -1, 0.0, 1e9};
+    State best_end_state = {-1, -1, 0, 1e9, 1e9};
     
     while (!pq.empty()) {
         State current = pq.top();
         pq.pop();
         
         if (current.x == dest_x && current.y == dest_y) {
-            if (current.cost < best_end_state.cost) {
+            if (current.g_cost < best_end_state.g_cost) {
                 best_end_state = current;
             }
             continue;
         }
         
-        if (current.cost > min_cost[current]) continue;
+        if (current.g_cost > min_cost[current]) continue;
         
         std::vector<std::pair<int, int>> moves = {
             {0, 1}, {1, 0}, {0, -1}, {-1, 0}
@@ -52,51 +70,40 @@ PathResult Pathfinder::findPathTimeAStar(const Maze& maze, int start_x, int star
             moves.push_back({-1, 1});
         }
         
-        for (auto m : moves) {
+        for (const auto& m : moves) {
             int nx = current.x + m.first;
             int ny = current.y + m.second;
             
             if (!maze.isValid(nx, ny)) continue;
+            if (!maze.canMove(current.x, current.y, nx, ny, smooth)) continue;
             
-            bool blocked = false;
-            if (m.first == 0 && m.second == 1 && maze.hasWall(current.x, current.y, 'n')) blocked = true;
-            else if (m.first == 1 && m.second == 0 && maze.hasWall(current.x, current.y, 'e')) blocked = true;
-            else if (m.first == 0 && m.second == -1 && maze.hasWall(current.x, current.y, 's')) blocked = true;
-            else if (m.first == -1 && m.second == 0 && maze.hasWall(current.x, current.y, 'w')) blocked = true;
-            else if (smooth && abs(m.first) == 1 && abs(m.second) == 1) {
-                if (m.first == 1 && m.second == 1 && (maze.hasWall(current.x, current.y, 'n') || maze.hasWall(current.x, current.y, 'e'))) blocked = true;
-                if (m.first == 1 && m.second == -1 && (maze.hasWall(current.x, current.y, 's') || maze.hasWall(current.x, current.y, 'e'))) blocked = true;
-                if (m.first == -1 && m.second == -1 && (maze.hasWall(current.x, current.y, 's') || maze.hasWall(current.x, current.y, 'w'))) blocked = true;
-                if (m.first == -1 && m.second == 1 && (maze.hasWall(current.x, current.y, 'n') || maze.hasWall(current.x, current.y, 'w'))) blocked = true;
-            }
-            
-            if (blocked) continue;
-            
-            double target_angle = atan2(m.second, m.first) * 180.0 / M_PI;
+            int target_angle = snapAngle(std::atan2(m.second, m.first) * 180.0 / M_PI);
             if (target_angle < 0) target_angle += 360.0;
             
-            double angle_diff = abs(target_angle - current.angle);
+            double angle_diff = std::abs(target_angle - current.angle);
             if (angle_diff > 180.0) angle_diff = 360.0 - angle_diff;
             
-            double distance = sqrt(m.first * m.first + m.second * m.second);
-            double move_cost = (distance / max_speed) + (angle_diff / 90.0) * 0.5; // 0.5s per 90 deg turn
+            double distance = std::sqrt(m.first * m.first + m.second * m.second);
+            double move_cost = (distance / max_speed) + (angle_diff / 90.0) * 0.5;
             
-            State next_state = {nx, ny, target_angle, current.cost + move_cost};
-            State next_key = {nx, ny, target_angle, 0.0};
+            const double next_g = current.g_cost + move_cost;
+            State next_key = {nx, ny, target_angle, 0.0, 0.0};
             
-            if (min_cost.find(next_key) == min_cost.end() || next_state.cost < min_cost[next_key]) {
-                min_cost[next_key] = next_state.cost;
-                parent[next_key] = {current.x, current.y, current.angle, 0.0};
-                pq.push(next_state);
+            if (min_cost.find(next_key) == min_cost.end() || next_g < min_cost[next_key]) {
+                min_cost[next_key] = next_g;
+                parent[next_key] = {current.x, current.y, current.angle, 0.0, 0.0};
+                const double h = timeHeuristic(nx, ny, dest_x, dest_y, smooth, max_speed);
+                pq.push({nx, ny, target_angle, next_g, next_g + h});
             }
         }
     }
     
     PathResult res;
-    res.cost = best_end_state.cost;
+    res.cost = best_end_state.g_cost;
     if (res.cost < 1e9) {
-        State curr = {best_end_state.x, best_end_state.y, best_end_state.angle, 0.0};
-        while (curr.x != start_x || curr.y != start_y || abs(curr.angle - start_angle) > 1e-4) {
+        State curr = {best_end_state.x, best_end_state.y, best_end_state.angle, 0.0, 0.0};
+        while (curr.x != start_x || curr.y != start_y) {
+            if (parent.find(curr) == parent.end()) break;  // safety guard
             res.path.push_back({curr.x, curr.y});
             curr = parent[curr];
         }
@@ -132,14 +139,7 @@ PathResult Pathfinder::findPathFloodFill(const Maze& maze, int start_x, int star
             int ny = curr.y + m.second;
             
             if (!maze.isValid(nx, ny)) continue;
-            
-            bool blocked = false;
-            if (m.first == 0 && m.second == 1 && maze.hasWall(curr.x, curr.y, 'n')) blocked = true;
-            else if (m.first == 1 && m.second == 0 && maze.hasWall(curr.x, curr.y, 'e')) blocked = true;
-            else if (m.first == 0 && m.second == -1 && maze.hasWall(curr.x, curr.y, 's')) blocked = true;
-            else if (m.first == -1 && m.second == 0 && maze.hasWall(curr.x, curr.y, 'w')) blocked = true;
-            
-            if (blocked) continue;
+            if (!maze.canMove(curr.x, curr.y, nx, ny, false)) continue;
             
             Position next_pos = {nx, ny};
             if (dist.find(next_pos) == dist.end()) {
@@ -210,9 +210,15 @@ PathResult Pathfinder::findPathHandOnWall(const Maze& maze, int start_x, int sta
         else if (ang == 180) res.path.push_back({start_x, start_y - 1});
         else if (ang == 270) res.path.push_back({start_x + 1, start_y});
     } else {
-        // Turn around (U-turn), effectively going back to where we came from if not blocked
         if (!maze.hasWall(start_x, start_y, back_w)) {
             res.path.push_back({start_x - dx, start_y - dy});
+        }
+    }
+
+    if (res.path.size() > 1) {
+        const Position& next = res.path[1];
+        if (!maze.canMove(start_x, start_y, next.x, next.y, false)) {
+            res.path.resize(1);
         }
     }
     
