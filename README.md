@@ -20,12 +20,6 @@ Each maze is generated with a deterministic seed, and all three algorithms run o
 | Flood Fill | 101.5 | 243.1 | 373.2 | 573.1 s |
 | Wall Follower | 171.5 | 256.0 | 425.1 | 655.8 s |
 
-**Resume-ready bullets:**
-
-- Time-Aware A* reached the goal in **88.9% fewer speed-run steps** than Wall Follower while exploring **5.3% fewer cells** during the discovery phase.
-- Time-Aware A* completed speed runs in **81.3% fewer steps** than Flood Fill and finished **13.4% faster** in simulated time (diagonal-aware routing with turn costs).
-- Flood Fill took **40.8% fewer speed-run steps** than Wall Follower and explored **5.0% fewer cells** during discovery.
-
 Full CSV output: [`benchmark/results.txt`](benchmark/results.txt)
 
 ## Quick Start
